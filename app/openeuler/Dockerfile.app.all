@@ -18,7 +18,7 @@ ARG USERNAME=ros
 ARG IMAGE_TAG=2606
 ARG NETWORK_INTERFACE_NAME=wlp0s20f3
 ARG OS=openeuler
-ARG PARALLEL_JOBS=1
+ARG PARALLEL_JOBS=4
 
 
 # =============================================================================
@@ -51,7 +51,9 @@ ENV WORKSPACE=${WORKSPACE}
 ENV NETWORK_INTERFACE_NAME=${NETWORK_INTERFACE_NAME}
 
 # openEuler 基础工具 + AGIROS 开发工具
-RUN dnf -y update && dnf -y --setopt=install_weak_deps=False install \
+RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked \
+    --mount=type=cache,target=/var/lib/dnf,sharing=locked \
+    dnf -y update && dnf -y --setopt=install_weak_deps=False install \
     vim \
     nano \
     net-tools \
@@ -116,7 +118,9 @@ ENV WORKSPACE=${WORKSPACE}
 ENV NETWORK_INTERFACE_NAME=${NETWORK_INTERFACE_NAME}
 
 # openEuler 开发依赖（注意 -devel 后缀）
-RUN dnf -y update && dnf -y --setopt=install_weak_deps=False install \
+RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked \
+    --mount=type=cache,target=/var/lib/dnf,sharing=locked \
+    dnf -y update && dnf -y --setopt=install_weak_deps=False install \
     libyaml-cpp-devel \
     libpcap-devel \
     pcl-devel \
@@ -135,7 +139,9 @@ RUN dnf -y update && dnf -y --setopt=install_weak_deps=False install \
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
 # AGIROS 包
-RUN dnf -y update && dnf -y --setopt=install_weak_deps=False install \
+RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked \
+    --mount=type=cache,target=/var/lib/dnf,sharing=locked \
+    dnf -y update && dnf -y --setopt=install_weak_deps=False install \
     ${ROS_PREFIX}-${ROS_DISTRO}-cyclonedds \
     ${ROS_PREFIX}-${ROS_DISTRO}-rmw-cyclonedds-cpp \
     ${ROS_PREFIX}-${ROS_DISTRO}-navigation2 \
@@ -157,23 +163,33 @@ RUN mkdir -p ${WORKSPACE}/src && chown -R ${USERNAME}:${USERNAME} ${WORKSPACE}
 USER ${USERNAME}
 
 # 配置用户环境（.bashrc）
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /home/${USERNAME}/.bashrc     && echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/${USERNAME}/.bashrc     && echo "export ROS_DOMAIN_ID=0" >> /home/${USERNAME}/.bashrc     && echo "cd ${WORKSPACE}" >> /home/${USERNAME}/.bashrc
+RUN echo "source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash" >> /home/${USERNAME}/.bashrc     && echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/${USERNAME}/.bashrc     && echo "export ROS_DOMAIN_ID=0" >> /home/${USERNAME}/.bashrc     && echo "cd ${WORKSPACE}" >> /home/${USERNAME}/.bashrc
 
 # 复制应用源码（使用 --chown 确保权限正确）
 COPY --chown=${USERNAME}:${USERNAME} app_ws/unitree ${WORKSPACE}/src
 
 # 构建 cyclonedds_ws
-RUN cd ${WORKSPACE}/src/unitree_ros2/cyclonedds_ws && source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash    && colcon build --parallel-workers ${PARALLEL_JOBS}    && source install/setup.bash
-
-RUN cd ${WORKSPACE}/src/unitree_ros2/cyclonedds_ws \
+RUN --mount=type=cache,target=${WORKSPACE}/src/unitree_ros2/cyclonedds_ws/build,uid=1000,gid=1000 \
+    --mount=type=cache,target=${WORKSPACE}/src/unitree_ros2/cyclonedds_ws/install,uid=1000,gid=1000 \
+    set -exo pipefail; \
+    cd ${WORKSPACE}/src/unitree_ros2/cyclonedds_ws \
+    && mkdir -p log build install \
+    && chown -R ${USERNAME}:${USERNAME} . \
     && source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash \
+    && unset PYTHONDONTWRITEBYTECODE \
     && colcon build --parallel-workers ${PARALLEL_JOBS} \
     && source install/setup.bash
 
 
 # 构建 dog-bot 源码
-RUN cd ${WORKSPACE} \
+RUN --mount=type=cache,target=${WORKSPACE}/build,uid=1000,gid=1000 \
+    --mount=type=cache,target=${WORKSPACE}/install,uid=1000,gid=1000 \
+    set -exo pipefail; \
+    cd ${WORKSPACE} \
+    && mkdir -p log build install \
+    && chown -R ${USERNAME}:${USERNAME} . \
     && source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash \
+    && unset PYTHONDONTWRITEBYTECODE \
     && colcon build --symlink-install --parallel-workers ${PARALLEL_JOBS} \
     && source install/setup.bash
 

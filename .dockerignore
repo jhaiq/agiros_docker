@@ -1,0 +1,39 @@
+# Git
+.git/
+.gitignore
+.gitmodules
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+
+# Build artifacts
+build/
+install/
+log/
+*.deb
+*.rpm
+
+# Documentation
+docs/
+*.md
+*.rst
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore

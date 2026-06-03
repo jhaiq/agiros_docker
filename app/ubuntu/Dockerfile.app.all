@@ -295,12 +295,12 @@ RUN --mount=type=cache,target=${WORKSPACE}/build,uid=1000,gid=1000 \
     source install/setup.bash
 
 USER root
-RUN cat > /ros_entrypoint.sh <<'EOF'
+RUN cat > /ros_entrypoint.sh <<EOF
 #!/bin/bash
 set -e
 source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash
 [ -f "${WORKSPACE}/install/setup.bash" ] && source ${WORKSPACE}/install/setup.bash
-exec "$@"
+exec "\$@"
 EOF
 RUN chmod +x /ros_entrypoint.sh
 
@@ -309,7 +309,10 @@ ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["bash"]
 
 # =============================================================================
-# Stage 4: wheeltec app 
+# Stage 4: wheeltec app
+# TODO: 实现 wheeltec 轮趣小车阶段（当前为空占位符）
+## 依赖: base stage
+## 待完成: 添加 wheeltec 相关驱动、ROS 包和应用源码
 # =============================================================================
 
 
@@ -319,7 +322,10 @@ CMD ["bash"]
 
 
 # =============================================================================
-# Stage 5: uav app 
+# Stage 5: uav app
+# TODO: 实现 UAV/无人机阶段（当前为空占位符）
+## 依赖: base stage
+## 待完成: 添加 UAV 相关驱动、PX4/ArduPilot 集成、ROS 包和应用源码
 # =============================================================================
 
 
