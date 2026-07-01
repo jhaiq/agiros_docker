@@ -268,17 +268,21 @@ RUN mkdir -p ${WORKSPACE}/src && chown -R ${USERNAME}:${USERNAME} ${WORKSPACE}
 
 WORKDIR ${WORKSPACE}
 
+USER ${USERNAME}
+
 # .bashrc 配置
 RUN echo "source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash" >> /home/${USERNAME}/.bashrc && \
     echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/${USERNAME}/.bashrc && \
-    echo "source ${WORKSPACE}/install/setup.bash" >> /home/${USERNAME}/.bashrc && \
     echo "export ROS_DOMAIN_ID=0" >> /home/${USERNAME}/.bashrc && \
     echo "export GAZEBO_MODEL_PATH=\$GAZEBO_MODEL_PATH:${WORKSPACE}/src" >> /home/${USERNAME}/.bashrc && \
     echo "export IGN_GAZEBO_RESOURCE_PATH=\$IGN_GAZEBO_RESOURCE_PATH:${WORKSPACE}/src" >> /home/${USERNAME}/.bashrc && \
     echo "export IGN_GAZEBO_RESOURCE_PATH=${WORKSPACE}/src/ur_robotiq_sim_gz/models:\$IGN_GAZEBO_RESOURCE_PATH" >> /home/${USERNAME}/.bashrc && \
-    echo "cd ${WORKSPACE}" >> /home/${USERNAME}/.bashrc
+    echo "cd ${WORKSPACE}" >> /home/${USERNAME}/.bashrc && \
+    echo "source ${WORKSPACE}/install/setup.bash" >> /home/${USERNAME}/.bashrc
 
 COPY --chown=${USERNAME}:${USERNAME} src/ur5 ${WORKSPACE}/src
+
+USER root
 
 # yolo_ros 依赖
 RUN --mount=type=cache,target=/home/${USERNAME}/.cache/pip,uid=1000,gid=1000 \
@@ -286,23 +290,27 @@ RUN --mount=type=cache,target=/home/${USERNAME}/.cache/pip,uid=1000,gid=1000 \
     cd ${WORKSPACE}/src/yolo_ros/ && \
     pip3 install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=1000 -r requirements.txt
 
+
+
 # 构建（不使用 --symlink-install 避免运行时symlink断裂）
 RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked \
     set -exo pipefail; \
     qemu-ldconfig-fix enable; \
-    cd ${WORKSPACE}; \
-    mkdir -p log build install; \
-    source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash; \
-    agirosdep update; \
-    agirosdep install --from-paths src --ignore-src -r -y; \
-    unset PYTHONDONTWRITEBYTECODE; \
-    colcon build --parallel-workers ${PARALLEL_JOBS}; \
-    source install/setup.bash; \
+    su - ${USERNAME} -c "\
+        cd ${WORKSPACE}; \
+        mkdir -p log build install; \
+        source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash; \
+        agirosdep update; \
+        agirosdep install --from-paths src --ignore-src -r -y; \
+        unset PYTHONDONTWRITEBYTECODE; \
+        colcon build --parallel-workers ${PARALLEL_JOBS}; \
+        source install/setup.bash; \
+    "; \
     qemu-ldconfig-fix disable; \
     rm -rf /tmp/* /var/tmp/*
 
 USER root
-RUN cat > /ros_entrypoint.sh <<'EOF'
+RUN cat > /ros_entrypoint.sh <<EOF
 #!/bin/bash
 set -e
 source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash
@@ -321,11 +329,121 @@ CMD ["bash"]
 # Stage 4: wheeltec app 
 # =============================================================================
 
+FROM base AS wheeltec
+SHELL ["/bin/bash", "-exo", "pipefail", "-c"]
+
+ARG TARGETARCH TARGETPLATFORM
+ARG ROS_DISTRO ROS_PREFIX USERNAME
+ARG WORKSPACE=/workspace/app/wheeltec
+ARG NETWORK_INTERFACE_NAME BUILD_DATE GIT_COMMIT PARALLEL_JOBS IMAGE_TAG OS
 
 
+LABEL maintainer="AGIROS Team <4384213@qq.com>"
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.authors="AGIROS Team <4384213@qq.com>"
+LABEL org.opencontainers.image.vendor="AGIROS"
+LABEL org.opencontainers.image.title="AGIROS Wheeltec Application"
+LABEL org.opencontainers.image.description="Multi-architecture AGIROS ${ROS_DISTRO} application image with Wheeltec robot support. Includes navigation, aruco-ros, usb-cam."
+LABEL org.opencontainers.image.version="${IMAGE_TAG}"
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
+LABEL org.opencontainers.image.source="https://github.com/agiros/agiros-docker"
+LABEL org.opencontainers.image.licenses="Proprietary"
+LABEL org.opencontainers.image.base.name="docker.agiros.org.cn/agiros/${ROS_PREFIX}-${ROS_DISTRO}-${OS}-desktop:${IMAGE_TAG}"
 
 
+ENV ROS_DISTRO=${ROS_DISTRO}
+ENV ROS_PREFIX=${ROS_PREFIX}
+ENV WORKSPACE=${WORKSPACE}
 
+USER root
+
+RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked \
+    --mount=type=cache,target=/home/${USERNAME}/.cache/pip,uid=1000,gid=1000 \
+    set -exo pipefail; \
+    qemu-ldconfig-fix enable; \
+    dnf -y update --exclude='hdf5*' --exclude='netcdf*' --exclude='vtk*'; \
+    dnf -y --setopt=install_weak_deps=False install \
+        python3-pip \
+        wget \
+        gnupg2 \
+        asio-devel \
+        asio \
+        libpcap-devel \
+        alsa-lib-devel \
+        libuvc-devel \
+        usbutils \
+        ${ROS_PREFIX}-${ROS_DISTRO}-nav* \
+        ${ROS_PREFIX}-${ROS_DISTRO}-ackermann-msgs \
+        ${ROS_PREFIX}-${ROS_DISTRO}-aruco-ros \
+        ${ROS_PREFIX}-${ROS_DISTRO}-usb-cam \
+        ${ROS_PREFIX}-${ROS_DISTRO}-image-publisher \
+        ${ROS_PREFIX}-${ROS_DISTRO}-image-common \
+        ${ROS_PREFIX}-${ROS_DISTRO}-magic-enum \
+        ${ROS_PREFIX}-${ROS_DISTRO}-imu-filter-madgwick \
+        ${ROS_PREFIX}-${ROS_DISTRO}-joint-state-publisher \
+        ${ROS_PREFIX}-${ROS_DISTRO}-filters \
+        ${ROS_PREFIX}-${ROS_DISTRO}-rtcm-msgs \
+        ${ROS_PREFIX}-${ROS_DISTRO}-robot-localization \
+        ${ROS_PREFIX}-${ROS_DISTRO}-serial; \
+    dnf clean all; \
+    rm -rf /tmp/* /var/tmp/*; \
+    qemu-ldconfig-fix disable
+
+RUN mkdir -p ${WORKSPACE}/src && chown -R ${USERNAME}:${USERNAME} ${WORKSPACE}
+
+WORKDIR ${WORKSPACE}
+
+USER ${USERNAME}
+
+RUN echo "source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash" >> /home/${USERNAME}/.bashrc && \
+    echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/${USERNAME}/.bashrc && \
+    echo "export ROS_DOMAIN_ID=0" >> /home/${USERNAME}/.bashrc && \
+    echo "cd ${WORKSPACE}" >> /home/${USERNAME}/.bashrc && \
+    echo "source ${WORKSPACE}/install/setup.bash" >> /home/${USERNAME}/.bashrc
+
+COPY --chown=${USERNAME}:${USERNAME} src/wheeltec ${WORKSPACE}/src
+
+USER root
+RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked \
+    set -exo pipefail; \
+    qemu-ldconfig-fix enable; \
+    su - ${USERNAME} -c "\
+        cd ${WORKSPACE}/src && \
+        mv mec_car-demo/* mec_car-demo/.[!.]* . 2>/dev/null && \
+        rmdir mec_car-demo; \
+        cd ${WORKSPACE}; \
+        mkdir -p log build install; \
+        source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash; \
+        agirosdep update; \
+        agirosdep install --from-paths src --ignore-src -r -y; \
+        unset PYTHONDONTWRITEBYTECODE; \
+        colcon build --packages-select wheeltec_robot_msg; \
+        source install/setup.bash; \
+        colcon build --packages-select turn_on_wheeltec_robot; \
+        source install/setup.bash; \
+        colcon build --packages-select wheeltec_rrt_msg; \
+        source install/setup.bash; \
+        colcon build --parallel-workers ${PARALLEL_JOBS}; \
+        source install/setup.bash; \
+    "; \
+    qemu-ldconfig-fix disable; \
+    rm -rf /tmp/* /var/tmp/*
+
+USER root
+RUN cat > /ros_entrypoint.sh <<EOF
+#!/bin/bash
+set -e
+source /opt/${ROS_PREFIX}/${ROS_DISTRO}/setup.bash
+[ -f "${WORKSPACE}/install/setup.bash" ] && source ${WORKSPACE}/install/setup.bash
+exec "\$@"
+EOF
+RUN chmod +x /ros_entrypoint.sh
+
+USER ${USERNAME}
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD pgrep -f "agiros" || exit 1
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["bash"]
 
 # =============================================================================
 # Stage 5: uav app 

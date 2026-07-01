@@ -29,3 +29,9 @@
 [submodule "src/ur5/ur_robotiq_sim_gz"]
 	path = src/ur5/ur_robotiq_sim_gz
 	url = https://gitee.com/agiros/ur_robotiq_sim_gz.git
+[submodule "src/wheeltec/mec_car-demo"]
+	path = src/wheeltec/mec_car-demo
+	url = https://gitee.com/agiros/mec_car-demo.git
+[submodule "src/wheeltec/serial_ros2"]
+	path = src/wheeltec/serial_ros2
+	url = https://gitee.com/gao-bin123456789/serial_ros2.git

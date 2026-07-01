@@ -44,8 +44,8 @@ MODULES["app-openeuler"]="app/openeuler/Dockerfile.app.all"
 declare -A MODULE_STAGES
 MODULE_STAGES["agiros-ubuntu"]="base,dev,desktop,desktop-full"
 MODULE_STAGES["agiros-openeuler"]="base,dev,desktop,desktop-full"
-MODULE_STAGES["app-ubuntu"]="unitree,ur5"
-MODULE_STAGES["app-openeuler"]="unitree,ur5"
+MODULE_STAGES["app-ubuntu"]="unitree,ur5,wheeltec"
+MODULE_STAGES["app-openeuler"]="unitree,ur5,wheeltec"
 
 declare -A MODULE_DEFAULT_STAGE
 MODULE_DEFAULT_STAGE["agiros-ubuntu"]="desktop-full"
@@ -119,7 +119,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --module, -m NAME      Build specific module (see --list)"
             echo "  --stage, -s STAGE      Build specific stage (default: module default)"
-            echo "                         Multiple stages: --stage unitree,ur5"
+            echo "                         Multiple stages: --stage unitree,ur5,wheeltec"
             echo "  --platform, -p PLAT    Build platforms (default: linux/amd64,linux/arm64)"
             echo "  --push                 Push image to registry after build"
             echo "  --no-retry             Disable retry on network errors"
